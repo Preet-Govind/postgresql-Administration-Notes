@@ -371,11 +371,168 @@ To monitor the Archiver process, check the following:
 
 ---
 
-### **10. Additional Notes**
+### **10. Key Notes**
 
-- Ensure the `archive_command` is **idempotent**, so reruns don’t cause duplication issues.  
+- Ensure the `archive_command` is **idempotent**, so reruns don’t cause duplication issues.
+    -  Idempotent refers to an operation that produces the same result no matter how many times it is performed. For example, in HTTP, GET and DELETE requests are idempotent because repeated calls do not change the outcome.
 - Use a reliable storage system for the archive destination (e.g., NFS, cloud).  
 - Monitor the `pg_stat_archiver` view to catch archiving issues early.  
 - Combine archiving with base backups for robust PITR solutions.
 
 ---
+
+## **Memory Segments in PostgreSQL**
+
+In PostgreSQL, memory management is a critical component of database performance. It uses various memory segments to manage data efficiently, allowing for optimized reads, writes, and recovery operations. The key memory segments include **Shared Buffers**, **WAL Buffers**, and **CLOG & Other Buffers**. Below is a detailed breakdown:
+
+---
+
+### **1. Shared Buffer**
+- **Purpose**: Shared Buffers act as a cache between the database and disk. It ensures that data read or modified is processed in memory, avoiding frequent disk I/O. 
+- **Key Features**:
+  - **Direct Access Restriction**: Users cannot directly access data files stored on disk. Instead, all reads/writes (via `SELECT/INSERT/UPDATE/DELETE`) go through the **Shared Buffer**.
+  - **Dirty Buffers**: Data written or modified in Shared Buffers is referred to as a "dirty buffer".
+  - **Data Persistence**: Dirty buffers are flushed to disk by the **Background Writer Process**.
+- **Configuration**: 
+  - The size of the Shared Buffer pool is controlled by the `shared_buffers` parameter in the `postgresql.conf` file.
+- **Performance Impact**:
+  - Increasing the `shared_buffers` value can reduce disk I/O and improve query performance but requires sufficient available system memory.
+
+---
+
+### **2. WAL Buffer**
+- **Purpose**: Write-Ahead Log (WAL) Buffers, also known as "transaction log buffers," temporarily store WAL data before writing it to persistent storage.
+- **Key Features**:
+  - **WAL Data**: Contains metadata about changes made to the database (not the actual data). It is crucial for **database recovery** and helps reconstruct actual data during crash recovery.
+  - **Persistence**: WAL data is written to physical files known as **WAL Segments** or **Checkpoint Segments**.
+  - **Flushing**: The WAL Writer process is responsible for flushing WAL Buffers to the WAL segments on disk.
+- **Configuration**: 
+  - The size of the WAL Buffer is controlled by the `wal_buffers` parameter in the `postgresql.conf` file.
+- **Key Notes**: 
+  - Proper tuning of WAL Buffers is essential for balancing performance and recovery speed. Setting a value too low may cause frequent flushes, increasing I/O overhead.
+
+---
+
+### **3. CLOG and Other Buffers**
+#### **CLOG (Commit Log) Buffers**
+- **Purpose**: Tracks the commit status of all transactions in the database.  
+  - For example: Whether a transaction was committed or rolled back.  
+- **Key Feature**: Stored in memory to reduce latency for transaction status lookups during query execution.
+
+#### **Work Memory**
+- **Purpose**: Allocated for single sort operations or hash tables during query execution.
+- **Configuration**:
+  - Controlled by the `work_mem` parameter.
+- **Key Notes**:
+  - For complex queries with multiple sorts or hash operations, sufficient `work_mem` allocation prevents excessive disk usage.
+
+#### **Maintenance Work Memory**
+- **Purpose**: Reserved for **maintenance operations** such as:
+  - `VACUUM`
+  - `CREATE INDEX`
+  - `ALTER TABLE ADD FOREIGN KEY`
+- **Configuration**:
+  - Controlled by the `maintenance_work_mem` parameter.
+- **Key Notes**: 
+  - Since these operations are not frequent, the value for `maintenance_work_mem` can be larger than `work_mem`.
+
+#### **Temporary Buffers**
+- **Purpose**: Used during user sessions for operations involving **temporary tables**, **large sorts**, or **hash tables**.
+- **Configuration**:
+  - Controlled by the `temp_buffers` parameter.
+- **Key Notes**:
+  - This setting can only be modified within a session **before** the first use of temporary tables.
+
+---
+
+### **Key Notes**
+- **Shared Buffers**:
+  - Set to 25-40% of available system memory for most workloads.
+  - Monitor and adjust using tools like `pg_stat_activity` to avoid over-allocation.
+- **WAL Buffers**:
+  - Ensure sufficient allocation for write-heavy workloads to avoid frequent flushes.
+- **Work Memory**:
+  - Be cautious when tuning. Higher values may improve query performance but increase overall memory usage across concurrent queries.
+- **Maintenance Memory**:
+  - Allocate generously for `VACUUM` or index creation but monitor memory consumption for large operations.
+
+Proper tuning of PostgreSQL memory settings significantly impacts database performance, reducing latency and improving throughput while maintaining crash recovery and durability guarantees.
+
+---
+
+## **Physical Files in PostgreSQL**
+
+PostgreSQL stores and manages its data in various physical files. These files are critical for database operations, crash recovery, and performance monitoring. Below is an overview:
+
+---
+
+### **1. Data Files**
+- **Purpose**:  
+  Data files store the actual database content, including tables, indexes, and other objects.  
+  These files contain raw data, not executable instructions or code.
+- **Storage Details**:  
+  - Organized into 8 KB pages (default).  
+  - Data is read or written in these fixed-size pages.  
+- **Location**:  
+  Stored in the `$PGDATA/base` directory, with subdirectories for each database.
+
+---
+
+### **2. WAL (Write-Ahead Log) Files**
+- **Purpose**:  
+  Write-Ahead Log (WAL) files ensure durability and consistency by logging all changes before they are written to data files.  
+  WAL allows PostgreSQL to recover from crashes by replaying transactions.  
+- **Characteristics**:  
+  - WAL files store metadata sufficient to reconstruct actual data during recovery.  
+  - Changes are flushed from WAL buffers to disk by the WAL writer process.  
+- **Configuration Parameters**:  
+  - `wal_segment_size`: Size of each WAL segment (default: 16 MB).  
+  - `wal_buffers`: Memory allocated for WAL before writing to disk.  
+  - `archive_mode`: Enables WAL archiving for recovery purposes.
+- **Location**:  
+  Located in `$PGDATA/pg_wal` (or `$PGDATA/pg_xlog` in older versions).
+
+---
+
+### **3. Log Files**
+- **Purpose**:  
+  Log files record all server activity, including errors, warnings, queries, and performance statistics.  
+  Useful for debugging and monitoring database performance.  
+- **Log Contents**:  
+  - Server messages (e.g., stderr, csvlog, syslog).  
+  - Detailed query performance metrics (if `log_min_duration_statement` is set).  
+- **Configuration Parameters**:  
+  - `log_directory`: Specifies the directory for log files.  
+  - `log_filename`: Defines the log file naming convention.  
+  - `logging_collector`: Enables collection of logs into files.  
+- **Location**:  
+  By default, logs are stored in `$PGDATA/pg_log`.
+
+---
+
+### **4. Archive Log Files**
+- **Purpose**:  
+  Archive log files store copies of WAL segments for **Point-In-Time Recovery (PITR)** and disaster recovery.  
+  They are written when WAL files are filled, ensuring no WAL data is lost.  
+- **How it Works**:  
+  - WAL segments marked as `.ready` are archived.  
+  - Archiver process copies `.ready` files to the archive location and renames them as `.done`.  
+- **Configuration Parameters**:  
+  - `archive_mode`: Enables WAL archiving.  
+  - `archive_command`: Command to copy WAL segments to archive storage.  
+- **Use Case**:  
+  - Restoring a database to a previous state.  
+  - Required for replication and backup strategies.  
+- **Location**:  
+  Specified by the `archive_command` parameter, usually in a user-defined directory.  
+
+---
+
+### **Key Notes**
+- **Durability & Recovery**:  
+  WAL and archive logs are crucial for maintaining ACID compliance and recovering from crashes or failures.  
+- **Performance Monitoring**:  
+  Logs provide valuable insights into server health and query performance.  
+- **Best Practices**:  
+  - Keep log files and archive logs regularly monitored and rotated.  
+  - Ensure sufficient storage for WAL and archive logs to prevent database interruptions.  
