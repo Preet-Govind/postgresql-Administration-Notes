@@ -104,7 +104,7 @@ PostgreSQL operates with various processes to ensure scalability and stability:
    - **BGWriter**: Writes dirty pages from shared buffers to disk.  
    - **WAL Writer**: Flushes WAL changes to disk.  
    - **Auto Vacuum**: Maintains database health and updates statistics.  
-   - **Checkpoint**: Ensures data consistency by flushing changes to disk periodically.  
+   - **Checkpoint**: Ensures data consistency by flushing changes(i.e syncs all buffers from shared buffer to data files) to disk periodically or when ```max_wal_size``` value is exceeded.  
    - **Stats Collector**: Gathers performance metrics and activity logs.  
    - **Archiver**: Archives WAL files for PITR.  
    - **Logical Replication Launcher**: Manages replication workers for logical replication.  
