@@ -212,3 +212,23 @@ If corruption is suspected:
    - Ensure proper permissions (owned by the `postgres` user).
 
 ---
+
+### Quick Reference Commands
+
+Below is a table of commonly used commands for managing PostgreSQL's data and database directories.
+
+| **Task**                     | **Command** |
+|-------------------------------|-------------|
+| **Check current data directory** | `SHOW data_directory;` |
+| **Find database OID**         | `SELECT oid, datname FROM pg_database;` |
+| **Stop PostgreSQL service**   | `sudo systemctl stop postgresql-15` |
+| **Start PostgreSQL service**  | `sudo systemctl start postgresql-15` |
+| **Verify service status**     | `sudo systemctl status postgresql-15` |
+| **Copy data to new directory**| `sudo rsync -av --progress <source> <destination>` |
+| **Set permissions for new directory** | `sudo chown postgres:postgres <path>` <br> `sudo chmod 750 <path>` |
+| **Edit PostgreSQL configuration** | `sudo nano /var/lib/postgresql/15/data/postgresql.conf` |
+| **Monitor logs**              | `sudo journalctl -u postgresql-15` |
+| **Find tablespace directory** | `SELECT oid FROM pg_tablespace WHERE spcname = '<tablespace_name>';` |
+
+---
+
