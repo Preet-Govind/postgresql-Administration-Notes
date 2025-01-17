@@ -139,17 +139,20 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     i INT;
+	nth int;
 BEGIN
+    select max(user_id) into nth from main.users;
     FOR i IN 1..p_count LOOP
-        INSERT INTO main.users(username, email)
+        nth:=nth+1;
+		INSERT INTO main.users(username, email)
         VALUES (
-            'User' || i,
-            'user' || i || '@example.com'
+            'User' || nth,
+            'user' || nth || '@example.com'
         );
 
         -- Log the insert
         INSERT INTO history.users_history(user_id, username, email, operation_type)
-        VALUES (currval('main.users_user_id_seq'), 'User' || i, 'user' || i || '@example.com', 'INSERT');
+        VALUES (currval('main.users_user_id_seq'), 'User' || nth, 'user' || nth || '@example.com', 'INSERT');
     END LOOP;
 END;
 $$;
