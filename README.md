@@ -241,8 +241,88 @@ Now to login from windows (11) open command prompt
 C:\Windows\System32>psql -h localhost -p 5435 -U postgres
 ```
 ---
+
+<details close><summary>Images</summary>
+  
 WSL2 Ubuntu 24.04
 ![image](https://github.com/Preet-Govind/postgresql-Administration-Notes/blob/main/wsl_terminal_psql.png)
---
+
+---
+
 Windows 11 cmd
 ![image](https://github.com/Preet-Govind/postgresql-Administration-Notes/blob/main/cmd_psql.png)
+
+</details>
+
+
+### Now readying a replica apart from archive
+Update postgresql.conf on the Primary
+```
+ALTER SYSTEM SET listen_addresses = '*';
+ALTER SYSTEM SET wal_level = 'replica';
+ALTER SYSTEM SET max_wal_senders = 5;
+ALTER SYSTEM SET max_replication_slots = 5;
+```
+Verify , moostly used 123456 for ease of practice
+```
+SELECT pg_reload_conf();
+CREATE ROLE replica_user WITH REPLICATION LOGIN PASSWORD '123456';
+```
+Update pg_hba.conf
+```
+host    replication    all    127.0.0.1/32    md5
+```
+
+create the Cluster with pg_createcluster , 16 is the postgres version replica_cluster is the name given
+```
+sudo pg_createcluster --port 5436 16 replica_cluster
+sudo pg_basebackup -h 127.0.0.1 -p 5435 -U replica_user -D /var/lib/postgresql/16/replica_cluster/ -Fp -Xs -P -R
+```
+Verify primary con info
+```
+primary_conninfo = 'host=127.0.0.1 port=5436 user=replica_user password=123456'
+```
+
+Update replica's postgresql.conf
+```
+listen_addresses = '*'
+hot_standby = on
+```
+Restart with the changes
+```
+sudo systemctl restart postgresql@16-replica_cluster
+pg_lsclusters
+```
+verify from db
+```
+SELECT pg_is_in_recovery(); -- Should return 'true'
+  
+```
+
+If not able to access then local param value can be changed from md5 to trust then
+```
+ubuntu24_04@Preet:~$ psql -U postgres -p 5436
+psql (16.6 (Ubuntu 16.6-0ubuntu0.24.04.1))
+Type "help" for help.
+
+postgres=# \password postgres
+Enter new password for user "postgres":
+Enter it again:
+postgres=# exit
+```
+After this, revert trust back to md5 and restart the cluster
+
+---
+
+<details close>
+  <summary>Images</summary>
+  
+WSL2 Ubuntu 24.04
+![image](https://github.com/Preet-Govind/postgresql-Administration-Notes/blob/main/term2.png)
+
+---
+
+Windows 11 cmd
+![image](https://github.com/Preet-Govind/postgresql-Administration-Notes/blob/main/cmd2.png)
+
+</details>
