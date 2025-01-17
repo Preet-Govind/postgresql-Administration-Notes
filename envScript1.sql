@@ -491,3 +491,9 @@ SELECT pg_size_pretty(pg_total_relation_size('main.users'));
 
 \c archive
 SELECT pg_size_pretty(pg_total_relation_size('archive_main.orders_archive'));
+
+
+\c postgres
+-- if re-serialize serial column for main.users
+truncate table main.users
+SELECT setval('main.users_user_id_seq', COALESCE(MAX(user_id), 0) + 1, false) FROM main.users;
