@@ -276,41 +276,47 @@ host    replication    all    127.0.0.1/32    md5
 create the Cluster with pg_createcluster , 16 is the postgres version replica_cluster is the name given
 ```
 sudo pg_createcluster --port 5436 16 replica_cluster
-sudo pg_basebackup -h 127.0.0.1 -p 5435 -U replica_user -D /var/lib/postgresql/16/replica_cluster/ -Fp -Xs -P -R
-```
-Verify primary con info
-```
-primary_conninfo = 'host=127.0.0.1 port=5436 user=replica_user password=123456'
 ```
 
-Update replica's postgresql.conf
+Remove data and take base backup
 ```
-listen_addresses = '*'
-hot_standby = on
+sudo rm -rv /var/lib/postgresql/16/replica_cluster/
+sudo pg_basebackup -h 127.0.0.1 -p 5435 -U replica_user -X stream -C -S replica_1 -v -R -W -D /var/lib/postgresql/16/replica_cluster/
 ```
-Restart with the changes
+
+Give permission to postgres user
+```
+sudo chown postgres -R /var/lib/postgresql/16/main/
+sudo systemctl restart postgresql
+```
+Restart with the changes,if needed
 ```
 sudo systemctl restart postgresql@16-replica_cluster
 pg_lsclusters
 ```
+
+Verify primary con info
+```
+ubuntu24_04@Preet:~$ sudo cat /var/lib/postgresql/16/replica_cluster/postgresql.auto.conf
+[sudo] password for ubuntu24_04:
+
+primary_conninfo = 'user=replica_user password=123456 channel_binding=prefer host=127.0.0.1 port=5435 sslmode=prefer ss>primary_slot_name = 'replica_1'
+```
+
+Verify with the replica's data or check with some main's table in replica
+```
+ubuntu24_04@Preet:~$ psql -U postgres -p 5436
+SELECT client_addr, state
+FROM pg_stat_replication;
+```
+
 verify from db
 ```
 SELECT pg_is_in_recovery(); -- Should return 'true'
-  
+postgres=# SELECT now() - pg_last_xact_replay_timestamp() AS replication_delay;
 ```
 
-If not able to access then local param value can be changed from md5 to trust then
-```
-ubuntu24_04@Preet:~$ psql -U postgres -p 5436
-psql (16.6 (Ubuntu 16.6-0ubuntu0.24.04.1))
-Type "help" for help.
-
-postgres=# \password postgres
-Enter new password for user "postgres":
-Enter it again:
-postgres=# exit
-```
-After this, revert trust back to md5 and restart the cluster
+You can't change the password for postgres as its in read-only
 
 ---
 
@@ -321,8 +327,8 @@ WSL2 Ubuntu 24.04
 ![image](https://github.com/Preet-Govind/postgresql-Administration-Notes/blob/main/term2.png)
 
 ---
-
+<!--
 Windows 11 cmd
 ![image](https://github.com/Preet-Govind/postgresql-Administration-Notes/blob/main/cmd2.png)
-
+-->
 </details>
